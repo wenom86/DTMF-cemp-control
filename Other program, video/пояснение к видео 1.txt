@@ -1,0 +1,102 @@
+Опубликовано: 17 июн. 2015 г.
+v.1 Arduino аудио плеер SD карта play WAV audio Card Memory TMRpcm library
+Version.1 2015/06/15
+_________________
+Что нам понадобится:
+1.) Arduino.
+2.) SD карта.
+3.) Динамик.
+Модуль для SD карты, намного! упростит задачу - SD Card Memory Shield Module SPI.
+_________________
+Из личного опыта - обнаруженные "подводные камни":
+1.) Загружая sketch из Arduino (IDE) - 1.6.4, звук воспроизводится хуже!, чем из
+старой версии Arduino (IDE) - 1.0.1.
+.
+2.) SD карта на 16 гигабайт class 10, воспроизводила звук лучше, чем SD карта на 
+4 гигабайт class 6.
+
+3.) Для сглаживания / удаления небольшого треска, можно припаять параллельно к
+контактам динамика, конденсатор на 10 MF, звук становится слегка приглушенный,
+но зато, совсем без треска. 
+
+Форматы audio .WAV файла: 8-бит, частота дискретизации 8-32khz, моно.
+_________________
+
+Скачать sketch: v.1 Arduino аудио плеер SD карта play WAV audio Card Memory TMRpcm library.
+Скачать WAV files для Arduino.
+https://yadi.sk/d/AG1GM4KihJ8ry
+_________________
+
+Вспомогательные ссылки:
+Arduino SD карта тест Storage Board Mciro SD TF Card Memory Shield Module SPI.
+http://www.youtube.com/watch?v=NDxK7u...
+
+Arduino регистратор SD card read write DS1302 Real Time DHT11 thermometer receptionist.
+http://www.youtube.com/watch?v=3OlMC5...
+
+How to play WAV audio files with Arduino Uno and MicroSD card.
+Как играть WAV аудио файлы с Arduino Uno и MicroSD карты.
+http://maxoffsky.com/maxoffsky-blog/h...
+
+Playing Wave file using arduino.
+http://www.instructables.com/id/Playi...
+
+Arduino library for asynchronous playback of PCM/WAV files direct from SD cardArduino library.
+for asynchronous playback of PCM/WAV files direct from SD card.
+https://github.com/TMRh20/TMRpcm
+https://github.com/TMRh20/TMRpcm/wiki
+
+Cheap DIY SD card breadboard socket.
+http://www.instructables.com/id/Cheap...
+
+v.1 Arduino бесплатное управление домом телефоном Phone Control DTMF Decoder GSM.
+http://www.youtube.com/watch?v=jRLVYa...
+
+----------------------------------------------------------------------------------------------------------
+
+ функции библиотеки TMRpcm:
+ audio.play ("имя файла"); играет файл.
+ audio.play ("имя файла", 30); играет файл, начиная с 30 секунд в след.
+ audio.speakerPin = 11; установлен в 5,6,11 или 46 мега, 9 для Uno, Nano и т.д.
+ audio.disable (); отключает таймер на выходной контакт и останавливает музыку.
+ audio.stopPlayback (); останавливает музыку, но оставляет запуск таймера.
+ audio.isPlaying (); возвращает 1, если играет музыка, если не 0.
+ audio.pause (); паузу / продолжает воспроизведение воспроизведение.
+ audio.quality (1); Установите 1 для 2x передискретизации.
+ audio.volume (0); 1 (вверх) или 0 (вниз), чтобы контролировать объем.
+ audio.setVolume (0); 0 до 7. Установить уровень громкости.
+ audio.loop (1); 0 или 1. Может быть изменен во время воспроизведения для полного
+ контроля зацикливания.
+ _______________
+ 
+ PINS, для SD Card Module - Arduino UNO PINS.
+ MOSI - pin 11
+ MISO - pin 12
+ CLK/SCK - pin 13
+ CS - pin 4 - Можно изменять.
+ _______________
+ */
+
+#include <EEPROM.h>
+#include <SD.h> // Библиотека для SD Card.
+#include <TMRpcm.h> // Библиотека TMRpcm 1.6.1 https://github.com/TMRh20/TMRpcm
+TMRpcm tmrpcm; // create an object for use in this sketch.
+
+void setup(){
+  tmrpcm.speakerPin = 9; // Динамик подключен к 9 - pin.
+  if (!SD.begin(4)); // Здесь можно изменить № pin-CS - pin 4.
+
+  // Чтоб не использовать дополнительную кнопку, для перехода 
+  // к воспроизведению следующего .WAV файла, 
+  // будем использовать кнопку reset, на плате arduino.
+  int i = (EEPROM.read(0));
+  EEPROM.write(0, i + 1); // При запуске arduino, прибавляем +1 в ячейку № 0 EEPROM.    
+  if (i == 1)tmrpcm.play("1.wav");
+  else if (i == 2)tmrpcm.play("2.wav");
+  else if (i == 3)tmrpcm.play("3.wav");
+  else if (i == 4)tmrpcm.play("4.wav");
+  else if (i >= 5) EEPROM.write(0, 1),tmrpcm.play("5.wav");
+  // Обнуляем ячейку № 0 EEPROM.
+}
+void loop(){
+}  

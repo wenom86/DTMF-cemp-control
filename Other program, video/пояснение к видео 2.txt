@@ -1,0 +1,184 @@
+/*Dmitry OSIPOV. http://www.youtube.com/user/d36073?feature=watch
+ v.1 Arduino Управление домом телефоном Phone Control DTMF Decoder play Audio message
+ Version.1 2015/06/19
+ _________________
+ Этот видео урок, продолжение дух предыдущих видео уроков.
+ 
+ v.1 Arduino бесплатное управление домом телефоном Phone Control DTMF Decoder GSM
+ http://www.youtube.com/watch?v=jRLVYaG4Sgk
+ 
+ v.1 Arduino аудио плеер SD карта play WAV audio Card Memory TMRpcm library
+ http://www.youtube.com/watch?v=reTmJu0uvBo
+ _________________
+ Скачать:
+ sketch.
+ WAV files.
+ Talk_1.6.apk.
+ audacity-win-2.1.0.exe. 
+ https://yadi.sk/d/D4PKOmjDhP9QE
+ _________________
+ Телефон сервер = "Т-С";
+ Телефон клиент = "Т-К";
+ DTMF-команд = "D-К";
+ _________________
+ В этой версии, мы будем не только управлять Arduino с помощью "D-К", но и отправлять обратно
+ на "Т-К", голосовое оповещение о выполненных командах, или о состоянии например датчика температуры.
+ _________________
+ К "Т-С" подключаем (jack-3.5) 4-контактный), нам надо задействовать микрофонный вход "Т-С",
+ для отправки голосовых сообщений, на  "Т-К".
+ У разных производителей телефонов, распиновка (jack-3.5) 4-контакта), может отличатся!
+ _________________
+ 
+ Принцип работы: 
+ 
+ С "Т-К" звоним на "Т-С",  "Т-С" сам автоматический "поднимает трубку" (устанавливаем авто-ответ (авто-поднятие).
+ С "Т-К" отправляем "D-К" на "Т-С", у "Т-С" к разъему для гарнитуры (jack-3.5), подключён (DTMF-Decoder).
+ (DTMF-Decoder) принимает "D-К", и отправляет сигнал "LOW", на соответствующий PIN Arduino.
+ 
+ "D-К"-"5"- Получить данные, с датчика температуры.
+ "D-К"-"1,2,3,4,"- Инвертировать значения Pins, и получить отчёт в виде голосового сообщения.
+ "D-К"-"#"- Инвертировать состояние, межу режимами - управления / наблюдения.
+ В режиме управления - можем изменять состояние Pins  на Arduino.
+ в режиме наблюдения - только получать отчёт, в виде голосового сообщения.
+ _________________
+ Выходы из Arduino ("speakerPin", я подключил к микрофонному входу телефона (+ и -),
+ через резисторы на 2,2-килоом, для безопасности. 
+ _________________
+ 
+ Вспомогательные ссылки:
+ 
+ управление домом через телефон Phone Control DTMF MT8870 Audio Decoder
+ http://www.youtube.com/watch?v=oTZ6NqeKvVU
+ 
+ Arduino SD карта тест Storage Board Mciro SD TF Card Memory Shield Module SPI.
+ http://www.youtube.com/watch?v=NDxK7uF8tVc
+ 
+ Talk - Text to Voice FREE
+ https://play.google.com/store/apps/details?id=com.ktix007.talk
+ 
+ Audacity
+ http://audacityteam.org/
+ 
+ SamsungTTS
+ https://drive.google.com/folderview?id=0B0K-
+ jS8Gc4dKfk9JSk9LSUx1di1BZHNGUUF3Q0pBTXVlTHloMUpWVnE1bi1LSF9fdzUxQkU&usp=sharing#list 
+ _________________
+ 
+ PINS, для SD Card Module - Arduino-UNO PINS.
+ MOSI - pin 11
+ MISO - pin 12
+ CLK/SCK - pin 13
+ CS - pin 10  Можно изменять.
+ _________________
+ 
+ */
+
+
+#include <EEPROM.h>
+#include <SD.h> // Библиотека для SD Card.
+#include <TMRpcm.h> // Библиотека TMRpcm https://github.com/TMRh20/TMRpcm/wiki
+TMRpcm tmrpcm; // create an object for use in this sketch.
+
+// Массив для аудио файлов "wav". На SD карте удалил из имени файла, названия-расширения-.wav.
+char* AudioFiles[]={
+  "1", "2", "3", "4", "5", "6", "7", "8", "9", "20", "on", "off", "lamp", "degrees", "temp", "control", "monitor"};
+
+int DTMF_Pins[] = { // Для экономии PINS, использую только 7 PINS DTMF-Decoder. (1-2-3-4-5-#-STD). 
+  2, 3, 4, 5, 6, 7, 8 // на Arduino UNO - (7-PIN - (#-"решетка") - (8-PIN-(STD-PIN-общий).
+};
+
+int ledPins[] = { // Массив для 4 PINS - led / реле.
+  16, 17, 18, 19 // на Arduino UNO - PINS (A2)-(A3)-(A4)-(A5).
+};
+
+int TemperatureSensor; // датчик температуры PIN - (A0).
+
+int index; // Для циклов for / Для доступа, к индексам массивов. 
+boolean Lock; // инвертируем, (Система переведена в режим - (мониторинга / управления).
+
+void setup(){
+  Serial.begin(9600); 
+  tmrpcm.speakerPin = 9; // (Динамик / микрофон телефона "Т-С") - подключен к 9-pin.
+
+  if (!SD.begin(10)) {  // Здесь можно изменить № pin-CS - 10-pin.
+    Serial.println("SD fail"); // Если проблема, с SD Card.
+    return;   // don't do anything more if not.
+  }
+  else{   
+    Serial.println("SD ok"); // Если всё прекрасно, с SD Card.
+  }
+
+  for (index = 0; index <= 6; index++)pinMode(DTMF_Pins[index], INPUT); // Установим все 7 PINS в INPUT.
+  for (index = 0; index <= 3; index++)pinMode(ledPins[index], OUTPUT); // Установим все 4 PINS в OUTPUT.
+
+  // Для ручного теста / воспроизведения,  всех аудио файлов по кругу.
+  // Чтоб не использовать дополнительную кнопку, для перехода к воспроизведению следующего .WAV файла, 
+  // будем использовать кнопку reset, на плате arduino.
+  index = (EEPROM.read(0));
+  EEPROM.write(0, index + 1); // При запуске arduino, прибавляем +1 в ячейку № 0 EEPROM.  
+  tmrpcm.play(AudioFiles[index]); // Воспроизводим .WAV файл.
+  if (index >= 16) EEPROM.write(0, 0);// Обнуляем ячейку № 0 EEPROM.
+}
+
+void loop() {
+  // Если 7 элемент массива / 6 индекс массива / (STD-PIN-общий) / на Arduino 8-PIN) == HIGH.
+  if (digitalRead(DTMF_Pins[6]) == HIGH) { 
+    if (digitalRead(DTMF_Pins[5]) == LOW){ // 6 элемент / 5 индекс /(7-PIN - (#-"решетка") == LOW.
+      delay(500);
+      Lock = !Lock; // Инвертируем - Система переведена в режим - (мониторинга / управления).
+      if (Lock == 0)tmrpcm.play(AudioFiles[15]); // Воспроизводим "control" "режим-управления".
+      else tmrpcm.play(AudioFiles[16]); // Воспроизводим "monitor" "режим-мониторинга".
+      delay(500); 
+      return; 
+    }
+
+    else if (digitalRead(DTMF_Pins[4]) == LOW){ // 5 элемент / 4 индекс /(6-PIN - (цифра-"5") == LOW.
+      delay(500);
+      TemperatureSensor = analogRead(A0); // Датчик температуры.
+      Serial.println(TemperatureSensor);
+      TemperatureSensor = map(TemperatureSensor, 300, 900, 1, 9); // Конвертируем диапазон значений.
+      Serial.print("TemperatureSensor - ");
+      Serial.println(TemperatureSensor + 21);
+      delay(500);
+      tmrpcm.play(AudioFiles[14]); // Воспроизводим "temp" / слово - "Температура".
+      delay(1000); // Пауза, чтоб успели воспроизвести слово - "Температура".
+      tmrpcm.play(AudioFiles[9]); // Воспроизводим "20".
+      delay(700); 
+      tmrpcm.play(AudioFiles[TemperatureSensor]); // Воспроизводим индекс массива AudioFiles[].
+      delay(1000); 
+      tmrpcm.play(AudioFiles[13]); // воспроизводим "degrees" / слово - "Градусов".
+      delay(500); 
+      return;  
+    }
+
+    else 
+      for (index = 0; index <= 3; index++) { // Проверяем состояние 4-Pins(DTMF-Decoder).           
+      if (digitalRead(DTMF_Pins[index]) == LOW){ // Если на (DTMF-Decoder Pin) обнаружен LOW.
+        if (Lock == 0) // Только, если в режиме - управления.
+          digitalWrite(ledPins[index], !digitalRead(ledPins[index])); // Инвертируем значения ledPins[].
+        AudioMessage(); // Запускаем функцию.
+        // В "index", сохранится номер индекса массива "DTMF_Pins", с обнаруженным LOW.
+      }
+    }
+  }
+}
+
+void AudioMessage() {
+
+  delay(500);
+  tmrpcm.play(AudioFiles[12]); // Воспроизводим "lamp" / слово - "Лампа".
+  delay(500); 
+  tmrpcm.play(AudioFiles[index]); // Воспроизводим индекс массива AudioFiles[цифру].
+  delay(700);
+  if (digitalRead(ledPins[index]) == HIGH)tmrpcm.play(AudioFiles[10]);  // Воспроизводим "on" / слово - "Включена".  
+  else tmrpcm.play(AudioFiles[11]);// Воспроизводим "off" / слово - "Выключена". 
+  return;
+}
+
+
+
+
+
+
+
+
